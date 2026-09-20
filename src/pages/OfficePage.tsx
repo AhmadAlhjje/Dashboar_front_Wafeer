@@ -1,0 +1,453 @@
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { api, messageFor } from '../api/client';
+import { ACTION_LABEL, effectiveStatus, type AuditRecord, type LicenseStatus, type Office, type OfficeAdmin } from '../api/types';
+import { Button, Card, CopyButton, Empty, ErrorBox, Field, Input, Modal, Select, Stat, StatusBadge, Textarea, fmtDate, toDateInput, useToast } from '../components/ui';
+import { suggestPassword } from './OfficesPage';
+
+export function OfficePage() {
+  const { id = '' } = useParams();
+  const toast = useToast();
+  const [office, setOffice] = useState<Office | null>(null);
+  const [admins, setAdmins] = useState<OfficeAdmin[]>([]);
+  const [audit, setAudit] = useState<AuditRecord[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await api.office(id);
+      setOffice(data.office);
+      setAdmins(data.admins);
+      setAudit(data.audit);
+      setError(null);
+    } catch (e) {
+      setError(messageFor(e));
+    }
+  }, [id]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (error && !office) return <ErrorBox text={error} />;
+  if (!office) return <p className="muted">جارٍ التحميل…</p>;
+  const status = effectiveStatus(office);
+
+  return (
+    <>
+      <header className="page-header">
+        <div>
+          <p className="crumbs">
+            <Link to="/offices" className="link">
+              المكاتب
+            </Link>{' '}
+            ‹ {office.name}
+          </p>
+          <h1>
+            {office.name} <StatusBadge status={status} />
+          </h1>
+          <p className="muted">
+            كود المكتب: <span className="mono">{office.code}</span> <CopyButton value={office.code} /> · أُنشئ {fmtDate(office.createdAt)}
+          </p>
+        </div>
+        <RegenerateCode office={office} onDone={load} />
+      </header>
+      <ErrorBox text={error} />
+
+      <div className="stats-grid">
+        <Stat label="الإداريون (نشط/الكل)" value={`${office.stats?.activeAdmins ?? 0} / ${office.stats?.admins ?? 0}`} />
+        <Stat label="العملاء" value={office.stats?.clients ?? 0} />
+        <Stat label="الحركات" value={office.stats?.movements ?? 0} tone="gold" />
+        <Stat label="حركات اليوم" value={office.stats?.movementsToday ?? 0} />
+        <Stat label="آخر حركة" value={fmtDate(office.stats?.lastMovementAt)} />
+      </div>
+
+      <div className="two-col">
+        <LicenseCard office={office} onSaved={load} />
+        <InfoCard office={office} onSaved={load} />
+      </div>
+      <AdminsCard officeId={office.id} admins={admins} onChanged={load} toast={toast} />
+      <Card title="سجل عمليات هذا المكتب">
+        {audit.length === 0 ? (
+          <Empty text="لا عمليات بعد" />
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>الوقت</th>
+                <th>المالك</th>
+                <th>العملية</th>
+                <th>الهدف</th>
+              </tr>
+            </thead>
+            <tbody>
+              {audit.map((a) => (
+                <tr key={a.id}>
+                  <td className="num">{fmtDate(a.createdAt)}</td>
+                  <td>{a.ownerUsername}</td>
+                  <td>{ACTION_LABEL[a.action] ?? a.action}</td>
+                  <td>{a.target ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </>
+  );
+}
+
+/** توليد كود مكتب جديد عند ضياعه: تأكيد ← الكود الجديد يُعرض مرة واحدة ← الدخول التالي به. */
+function RegenerateCode({ office, onDone }: { office: Office; onDone: () => Promise<void> }) {
+  const toast = useToast();
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [newCode, setNewCode] = useState<string | null>(null);
+  const run = async () => {
+    setBusy(true);
+    try {
+      const updated = await api.regenerateCode(office.id);
+      setConfirm(false);
+      setNewCode(updated.code);
+      toast('success', 'وُلّد كود جديد للمكتب');
+      await onDone();
+    } catch (err) {
+      toast('error', messageFor(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <Button onClick={() => setConfirm(true)}>توليد كود جديد</Button>
+      <Modal open={confirm} title="توليد كود مكتب جديد" onClose={() => !busy && setConfirm(false)}>
+        <p>
+          سيتوقف الكود الحالي <span className="mono">{office.code}</span> فوراً ويُستبدل بكود جديد. الأجهزة المسجّلة الدخول حالياً تكمل عملها، وعند الدخول التالي يُطلب منها الكود الجديد.
+        </p>
+        <div className="modal-actions">
+          <Button onClick={() => setConfirm(false)} disabled={busy}>
+            إلغاء
+          </Button>
+          <Button variant="danger" loading={busy} onClick={run}>
+            توليد الكود
+          </Button>
+        </div>
+      </Modal>
+      <Modal open={newCode !== null} title="الكود الجديد للمكتب" onClose={() => setNewCode(null)}>
+        {newCode ? (
+          <div className="handover">
+            <p className="muted">سلّم هذا الكود للمكتب؛ يُدخله مرة واحدة في شاشة الدخول:</p>
+            <dl className="kv">
+              <dt>كود المكتب</dt>
+              <dd className="mono">
+                {newCode} <CopyButton value={newCode} />
+              </dd>
+            </dl>
+          </div>
+        ) : null}
+      </Modal>
+    </>
+  );
+}
+
+function LicenseCard({ office, onSaved }: { office: Office; onSaved: () => Promise<void> }) {
+  const toast = useToast();
+  const [status, setStatus] = useState<LicenseStatus>(office.status);
+  const [expiresAt, setExpiresAt] = useState(toDateInput(office.expiresAt));
+  const [message, setMessage] = useState(office.message ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setStatus(office.status);
+    setExpiresAt(toDateInput(office.expiresAt));
+    setMessage(office.message ?? '');
+  }, [office]);
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.setLicense(office.id, { status, expiresAt: expiresAt || null, message: message.trim() || null });
+      toast('success', status === 'ACTIVE' ? 'الترخيص نشط — سيُرفع القفل لدى المكتب خلال ثوانٍ' : 'تم تغيير الترخيص — سيظهر القفل لدى المكتب خلال ثوانٍ');
+      await onSaved();
+    } catch (err) {
+      setError(messageFor(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card title="الترخيص" actions={<StatusBadge status={effectiveStatus(office)} />}>
+      <form onSubmit={save} noValidate>
+        <Field label="الحالة">
+          <Select value={status} onChange={(e) => setStatus(e.target.value as LicenseStatus)}>
+            <option value="ACTIVE">نشط</option>
+            <option value="SUSPENDED">موقوف</option>
+            <option value="EXPIRED">منتهٍ</option>
+          </Select>
+        </Field>
+        <Field label="ينتهي الاشتراك في" hint="بعد هذا التاريخ يُعتبر النشط منتهياً تلقائياً — فارغ = بلا انتهاء">
+          <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} dir="ltr" />
+        </Field>
+        <Field label="رسالة تظهر للمكتب في شاشة القفل" hint="مثال: يرجى تسديد الاشتراك للتواصل 0998107722">
+          <Textarea value={message} onChange={(e) => setMessage(e.target.value)} />
+        </Field>
+        <ErrorBox text={error} />
+        <div className="row-end">
+          {status !== 'ACTIVE' ? (
+            <span className="muted small">سيُمنع دخول المكتب واستخدامه فوراً.</span>
+          ) : (
+            <span className="muted small">آخر فحص من الخادم: {fmtDate(office.license?.checkedAt)}</span>
+          )}
+          <Button type="submit" variant={status === 'ACTIVE' ? 'primary' : 'danger'} loading={saving}>
+            حفظ الترخيص
+          </Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+function InfoCard({ office, onSaved }: { office: Office; onSaved: () => Promise<void> }) {
+  const toast = useToast();
+  const [name, setName] = useState(office.name);
+  const [phone, setPhone] = useState(office.phone ?? '');
+  const [address, setAddress] = useState(office.address ?? '');
+  const [notes, setNotes] = useState(office.notes ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setName(office.name);
+    setPhone(office.phone ?? '');
+    setAddress(office.address ?? '');
+    setNotes(office.notes ?? '');
+  }, [office]);
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    if (name.trim().length < 2) return setError('اسم المكتب مطلوب');
+    setSaving(true);
+    setError(null);
+    try {
+      await api.updateOffice(office.id, { name: name.trim(), phone: phone.trim() || null, address: address.trim() || null, notes: notes.trim() || null });
+      toast('success', 'حُفظت بيانات المكتب');
+      await onSaved();
+    } catch (err) {
+      setError(messageFor(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card title="بيانات المكتب">
+      <form onSubmit={save} noValidate>
+        <Field label="الاسم">
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label="الهاتف">
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" />
+        </Field>
+        <Field label="العنوان">
+          <Input value={address} onChange={(e) => setAddress(e.target.value)} />
+        </Field>
+        <Field label="ملاحظات داخلية (لا يراها المكتب)">
+          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
+        <ErrorBox text={error} />
+        <div className="row-end">
+          <Button type="submit" variant="primary" loading={saving}>
+            حفظ البيانات
+          </Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+function AdminsCard({ officeId, admins, onChanged, toast }: { officeId: string; admins: OfficeAdmin[]; onChanged: () => Promise<void>; toast: (k: 'success' | 'error', t: string) => void }) {
+  const [adding, setAdding] = useState(false);
+  const [reset, setReset] = useState<OfficeAdmin | null>(null);
+  const [form, setForm] = useState({ fullName: '', password: '', phone: '', email: '', role: 'ADMIN' });
+  const [newPassword, setNewPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [handover, setHandover] = useState<{ fullName: string; password: string } | null>(null);
+
+  const add = async (e: FormEvent) => {
+    e.preventDefault();
+    if (form.fullName.trim().length < 2) return setError('الاسم مطلوب');
+    if (form.password.length < 8) return setError('كلمة المرور 8 محارف فأكثر');
+    setBusy(true);
+    setError(null);
+    try {
+      const admin = await api.createOfficeAdmin(officeId, { fullName: form.fullName.trim(), password: form.password, phone: form.phone.trim() || null, email: form.email.trim() || null, role: form.role });
+      setHandover({ fullName: admin.fullName, password: form.password });
+      setAdding(false);
+      setForm({ fullName: '', password: '', phone: '', email: '', role: 'ADMIN' });
+      toast('success', `أُضيف الإداري ${admin.fullName}`);
+      await onChanged();
+    } catch (err) {
+      setError(messageFor(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doReset = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!reset) return;
+    if (newPassword.length < 8) return setError('كلمة المرور 8 محارف فأكثر');
+    setBusy(true);
+    setError(null);
+    try {
+      await api.resetOfficeAdminPassword(officeId, reset.id, newPassword);
+      setHandover({ fullName: reset.fullName, password: newPassword });
+      setReset(null);
+      setNewPassword('');
+      toast('success', 'أُعيد تعيين كلمة المرور');
+    } catch (err) {
+      setError(messageFor(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggle = async (a: OfficeAdmin) => {
+    try {
+      await api.setOfficeAdminActive(officeId, a.id, !a.isActive);
+      toast('success', a.isActive ? `عُطّل ${a.fullName}` : `فُعّل ${a.fullName}`);
+      await onChanged();
+    } catch (err) {
+      toast('error', messageFor(err));
+    }
+  };
+
+  return (
+    <Card
+      title="إداريو المكتب"
+      actions={
+        <Button variant="primary" onClick={() => setAdding(true)}>
+          + إداري
+        </Button>
+      }
+    >
+      {admins.length === 0 ? (
+        <Empty text="لا إداريين" />
+      ) : (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>الاسم</th>
+              <th>الدور</th>
+              <th>الهاتف</th>
+              <th>البريد</th>
+              <th>الحالة</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {admins.map((a) => (
+              <tr key={a.id}>
+                <td>{a.fullName}</td>
+                <td>{a.role}</td>
+                <td className="num">{a.phone ?? '—'}</td>
+                <td className="num">{a.email ?? '—'}</td>
+                <td>{a.isActive ? <span className="badge badge-active">نشط</span> : <span className="badge badge-suspended">معطّل</span>}</td>
+                <td className="actions">
+                  <Button className="btn-sm" onClick={() => setReset(a)}>
+                    إعادة تعيين كلمة المرور
+                  </Button>
+                  <Button className="btn-sm" variant={a.isActive ? 'danger' : 'secondary'} onClick={() => toggle(a)}>
+                    {a.isActive ? 'تعطيل' : 'تفعيل'}
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <Modal open={adding} title="إداري جديد" onClose={() => !busy && setAdding(false)}>
+        <form onSubmit={add} noValidate>
+          <Field label="الاسم الكامل (اسم الدخول)">
+            <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} autoFocus />
+          </Field>
+          <Field label="كلمة المرور">
+            <div className="row">
+              <Input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} dir="ltr" autoComplete="new-password" />
+              <Button type="button" onClick={() => setForm({ ...form, password: suggestPassword() })}>
+                توليد
+              </Button>
+            </div>
+          </Field>
+          <Field label="الدور">
+            <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+              <option value="ADMIN">مدير (كل الصلاحيات)</option>
+              <option value="MANAGER">مشرف</option>
+              <option value="ACCOUNTANT">محاسب</option>
+              <option value="EMPLOYEE">موظف</option>
+              <option value="VIEWER">مشاهد</option>
+            </Select>
+          </Field>
+          <Field label="الهاتف">
+            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} dir="ltr" />
+          </Field>
+          <Field label="البريد">
+            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} dir="ltr" />
+          </Field>
+          <ErrorBox text={error} />
+          <div className="modal-actions">
+            <Button type="button" onClick={() => setAdding(false)} disabled={busy}>
+              إلغاء
+            </Button>
+            <Button type="submit" variant="primary" loading={busy}>
+              إضافة
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={reset !== null} title={`إعادة تعيين كلمة مرور ${reset?.fullName ?? ''}`} onClose={() => !busy && setReset(null)}>
+        <form onSubmit={doReset} noValidate>
+          <Field label="كلمة المرور الجديدة">
+            <div className="row">
+              <Input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} dir="ltr" autoFocus autoComplete="new-password" />
+              <Button type="button" onClick={() => setNewPassword(suggestPassword())}>
+                توليد
+              </Button>
+            </div>
+          </Field>
+          <ErrorBox text={error} />
+          <div className="modal-actions">
+            <Button type="button" onClick={() => setReset(null)} disabled={busy}>
+              إلغاء
+            </Button>
+            <Button type="submit" variant="primary" loading={busy}>
+              حفظ
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={handover !== null} title="بيانات التسليم" onClose={() => setHandover(null)}>
+        {handover ? (
+          <div className="handover">
+            <p className="muted">تظهر كلمة المرور مرة واحدة فقط:</p>
+            <dl className="kv">
+              <dt>اسم المستخدم</dt>
+              <dd>
+                {handover.fullName} <CopyButton value={handover.fullName} />
+              </dd>
+              <dt>كلمة المرور</dt>
+              <dd className="mono">
+                {handover.password} <CopyButton value={handover.password} />
+              </dd>
+            </dl>
+          </div>
+        ) : null}
+      </Modal>
+    </Card>
+  );
+}
