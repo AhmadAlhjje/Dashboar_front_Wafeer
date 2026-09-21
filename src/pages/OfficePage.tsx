@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, messageFor } from '../api/client';
 import { ACTION_LABEL, effectiveStatus, type AuditRecord, type LicenseStatus, type Office, type OfficeAdmin } from '../api/types';
@@ -65,6 +65,7 @@ export function OfficePage() {
         <LicenseCard office={office} onSaved={load} />
         <InfoCard office={office} onSaved={load} />
       </div>
+      <LogoCard office={office} onChanged={load} />
       <AdminsCard officeId={office.id} admins={admins} onChanged={load} toast={toast} />
       <Card title="سجل عمليات هذا المكتب">
         {audit.length === 0 ? (
@@ -205,6 +206,126 @@ function LicenseCard({ office, onSaved }: { office: Office; onSaved: () => Promi
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+/**
+ * لوغو المكتب (قرار المستخدم 2026-09-21): يُغيَّر من هنا متى شاء المالك — يصل إلى تطبيق المكتب
+ * فوراً ويحلّ محل لوغوه المحلي؛ داخل التطبيق يبقى تعيين اللوغو «مرة واحدة» كما هو.
+ */
+function LogoCard({ office, onChanged }: { office: Office; onChanged: () => Promise<void> }) {
+  const toast = useToast();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [current, setCurrent] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // الصورة الحالية من الخادم (تتغيّر مع logoUpdatedAt)
+  useEffect(() => {
+    let url: string | null = null;
+    let cancelled = false;
+    if (!office.logoPath) {
+      setCurrent(null);
+      return;
+    }
+    api
+      .officeLogoBlob(office.id)
+      .then((blob) => {
+        if (cancelled || !blob) return;
+        url = URL.createObjectURL(blob);
+        setCurrent(url);
+      })
+      .catch(() => setCurrent(null));
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [office.id, office.logoPath, office.logoUpdatedAt]);
+
+  // معاينة الملف المختار قبل الرفع
+  useEffect(() => {
+    if (!file) {
+      setPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const pick = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setError(null);
+    if (f && !['image/png', 'image/jpeg', 'image/webp'].includes(f.type)) {
+      setFile(null);
+      return setError('الصورة يجب أن تكون PNG أو JPG أو WEBP');
+    }
+    if (f && f.size > 2 * 1024 * 1024) {
+      setFile(null);
+      return setError('حجم الصورة يجب ألا يتجاوز 2MB');
+    }
+    setFile(f);
+  };
+
+  const upload = async () => {
+    if (!file) return setError('اختر صورة أولاً');
+    setBusy(true);
+    setError(null);
+    try {
+      await api.setOfficeLogo(office.id, file);
+      setFile(null);
+      if (fileInput.current) fileInput.current.value = '';
+      toast('success', 'تم تحديث لوغو المكتب — يصل إلى التطبيق فوراً');
+      await onChanged();
+    } catch (err) {
+      setError(messageFor(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!window.confirm('إزالة لوغو المكتب؟ سيعود التطبيق إلى شعار وفير الافتراضي.')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.removeOfficeLogo(office.id);
+      toast('success', 'أُزيل لوغو المكتب');
+      await onChanged();
+    } catch (err) {
+      setError(messageFor(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="لوغو المكتب" actions={office.logoUpdatedAt ? <span className="muted">آخر تغيير: {fmtDate(office.logoUpdatedAt)}</span> : null}>
+      <div className="logo-row">
+        <div className="logo-preview" aria-label="اللوغو الحالي">
+          {preview ? <img src={preview} alt="معاينة اللوغو الجديد" /> : current ? <img src={current} alt="لوغو المكتب" /> : <span className="muted">لا لوغو</span>}
+        </div>
+        <div className="logo-actions">
+          <p className="muted">يُستخدم في ترويسة الطباعة داخل تطبيق المكتب. يمكن تغييره من هنا في أي وقت (PNG/JPG/WEBP حتى 2MB).</p>
+          <Field label="اختيار صورة">
+            <Input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" onChange={pick} />
+          </Field>
+          <ErrorBox text={error} />
+          <div className="row-end">
+            {office.logoPath ? (
+              <Button variant="danger" onClick={remove} disabled={busy}>
+                إزالة اللوغو
+              </Button>
+            ) : null}
+            <Button variant="primary" onClick={upload} loading={busy} disabled={!file}>
+              {office.logoPath ? 'استبدال اللوغو' : 'رفع اللوغو'}
+            </Button>
+          </div>
+        </div>
+      </div>
     </Card>
   );
 }

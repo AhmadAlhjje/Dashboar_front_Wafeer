@@ -652,3 +652,31 @@ textarea.input {
     grid-template-columns: 1fr;
   }
 }
+
+/* لوغو المكتب (لوحة التحكم) */
+.logo-row {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.logo-preview {
+  width: 160px;
+  height: 160px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--border, #444);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+.logo-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.logo-actions {
+  flex: 1 1 260px;
+  min-width: 0;
+}

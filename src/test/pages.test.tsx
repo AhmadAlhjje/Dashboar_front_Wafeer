@@ -14,6 +14,9 @@ const apiMock = vi.hoisted(() => ({
   setLicense: vi.fn(),
   updateOffice: vi.fn(),
   regenerateCode: vi.fn(),
+  setOfficeLogo: vi.fn(),
+  removeOfficeLogo: vi.fn(),
+  officeLogoBlob: vi.fn(),
   health: vi.fn(),
   overview: vi.fn(),
   audit: vi.fn(),
@@ -41,6 +44,8 @@ const office = (o: Partial<Office>): Office => ({
   phone: null,
   address: null,
   notes: null,
+  logoPath: null,
+  logoUpdatedAt: null,
   createdAt: '2026-09-20T00:00:00.000Z',
   updatedAt: '2026-09-20T00:00:00.000Z',
   stats: { officeId: '1', admins: 2, activeAdmins: 1, clients: 7, movements: 30, movementsToday: 2, lastMovementAt: null },
@@ -162,6 +167,52 @@ describe('office code regeneration', () => {
     await waitFor(() => expect(apiMock.regenerateCode).toHaveBeenCalledWith('1'));
     const shown = await screen.findByRole('dialog', { name: 'الكود الجديد للمكتب' });
     expect(within(shown).getByText('NEWC2DE9')).toBeInTheDocument();
+  });
+});
+
+describe('office logo (managed from the dashboard, changeable any time)', () => {
+  it('uploads a logo, then can replace it again, and can remove it', async () => {
+    const user = userEvent.setup();
+    const withLogo = office({ id: '1', logoPath: 'uploads/offices/office-1-a.png', logoUpdatedAt: '2026-09-21T10:00:00.000Z' });
+    apiMock.office.mockResolvedValueOnce({ office: office({ id: '1' }), admins: [], audit: [] }).mockResolvedValue({ office: withLogo, admins: [], audit: [] });
+    apiMock.setOfficeLogo.mockResolvedValue(withLogo);
+    apiMock.removeOfficeLogo.mockResolvedValue(office({ id: '1' }));
+    apiMock.officeLogoBlob.mockResolvedValue(new Blob(['png'], { type: 'image/png' }));
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:logo');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    renderAt('/offices/1', <OfficePage />);
+
+    expect(await screen.findByText('لا لوغو')).toBeInTheDocument();
+    const upload = screen.getByRole('button', { name: 'رفع اللوغو' });
+    expect(upload).toBeDisabled();
+    const file = new File(['png-bytes'], 'logo.png', { type: 'image/png' });
+    await user.upload(screen.getByLabelText('اختيار صورة'), file);
+    await user.click(screen.getByRole('button', { name: 'رفع اللوغو' }));
+    await waitFor(() => expect(apiMock.setOfficeLogo).toHaveBeenCalledWith('1', file));
+
+    // بعد الرفع: صورة حالية + زر «استبدال» (أي عدد من المرات) + زر إزالة
+    expect(await screen.findByRole('button', { name: 'استبدال اللوغو' })).toBeInTheDocument();
+    const again = new File(['png-2'], 'logo2.png', { type: 'image/png' });
+    await user.upload(screen.getByLabelText('اختيار صورة'), again);
+    await user.click(screen.getByRole('button', { name: 'استبدال اللوغو' }));
+    await waitFor(() => expect(apiMock.setOfficeLogo).toHaveBeenCalledTimes(2));
+
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: 'إزالة اللوغو' }));
+    await waitFor(() => expect(apiMock.removeOfficeLogo).toHaveBeenCalledWith('1'));
+  });
+
+  it('rejects a non-image file before calling the server', async () => {
+    // applyAccept=false: نتجاوز فلتر accept في المتصفح الوهمي لنختبر تحقق الصفحة نفسها
+    const user = userEvent.setup({ applyAccept: false });
+    apiMock.office.mockResolvedValue({ office: office({ id: '1' }), admins: [], audit: [] });
+    renderAt('/offices/1', <OfficePage />);
+    await screen.findByText('لا لوغو');
+    const input = screen.getByLabelText('اختيار صورة');
+    await user.upload(input, new File(['x'], 'x.txt', { type: 'text/plain' }));
+    expect(await screen.findByText('الصورة يجب أن تكون PNG أو JPG أو WEBP')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'رفع اللوغو' })).toBeDisabled();
+    expect(apiMock.setOfficeLogo).not.toHaveBeenCalled();
   });
 });
 

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes, forwardRef } from 'react';
 import { STATUS_LABEL, type LicenseStatus } from '../api/types';
 
 // ── أزرار ─────────────────────────────────────────────────────────────────
@@ -27,10 +27,10 @@ export function Field({ label, hint, error, children }: { label: string; hint?: 
     </div>
   );
 }
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(props, ref) {
   const id = useContext(FieldIdContext);
-  return <input id={id} className={`input ${props.className ?? ''}`} {...props} />;
-}
+  return <input ref={ref} id={id} className={`input ${props.className ?? ''}`} {...props} />;
+});
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const id = useContext(FieldIdContext);
   return <textarea id={id} className={`input ${props.className ?? ''}`} rows={3} {...props} />;

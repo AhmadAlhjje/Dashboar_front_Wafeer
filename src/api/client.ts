@@ -59,12 +59,14 @@ export const setUnauthorizedHandler = (handler: (() => void) | null) => {
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { accept: 'application/json' };
-  if (body !== undefined) headers['content-type'] = 'application/json';
+  // FormData (رفع ملف): المتصفح يضع content-type بحدود multipart بنفسه
+  const multipart = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (body !== undefined && !multipart) headers['content-type'] = 'application/json';
   const token = tokenStore.get();
   if (token) headers.authorization = `Bearer ${token}`;
   let response: Response;
   try {
-    response = await fetch(`${BASE}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    response = await fetch(`${BASE}${path}`, { method, headers, body: body === undefined ? undefined : multipart ? body : JSON.stringify(body) });
   } catch {
     throw new ApiError('NETWORK', 'تعذّر الاتصال بخادم اللوحة', 0);
   }
@@ -96,6 +98,21 @@ export const api = {
   setLicense: (id: string, license: Pick<License, 'status'> & { expiresAt?: string | null; message?: string | null }) =>
     call<Office>('PUT', `/offices/${id}/license`, license),
   regenerateCode: (id: string) => call<Office>('POST', `/offices/${id}/code`),
+  /** لوغو المكتب: يُبدَّل من اللوحة متى شاء المالك (داخل التطبيق يبقى مرة واحدة). */
+  setOfficeLogo: (id: string, file: File) => {
+    const form = new FormData();
+    form.append('logo', file, file.name);
+    return call<Office>('PUT', `/offices/${id}/logo`, form);
+  },
+  removeOfficeLogo: (id: string) => call<Office>('DELETE', `/offices/${id}/logo`),
+  /** يجلب صورة اللوغو الحالية (بتوكن المالك) كـ Blob لعرضها؛ null إن لم يوجد. */
+  officeLogoBlob: async (id: string): Promise<Blob | null> => {
+    const token = tokenStore.get();
+    const response = await fetch(`${BASE}/offices/${id}/logo`, { headers: token ? { authorization: `Bearer ${token}` } : {} });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new ApiError(`HTTP_${response.status}`, 'تعذّر جلب اللوغو', response.status);
+    return response.blob();
+  },
   officeAdmins: (id: string) => call<OfficeAdmin[]>('GET', `/offices/${id}/admins`),
   createOfficeAdmin: (id: string, input: { fullName: string; password: string; phone?: string | null; email?: string | null; role?: string }) =>
     call<OfficeAdmin>('POST', `/offices/${id}/admins`, input),

@@ -27,6 +27,9 @@ export interface Office {
   phone: string | null;
   address: string | null;
   notes: string | null;
+  /** لوغو المكتب (يُدار من اللوحة): مسار على خادم وفير أو null، ونسخة تتغيّر مع كل رفع. */
+  logoPath: string | null;
+  logoUpdatedAt: string | null;
   createdAt: string;
   updatedAt: string;
   stats?: OfficeStats | null;
@@ -106,6 +109,8 @@ export const ACTION_LABEL: Record<string, string> = {
   'office.created': 'إنشاء مكتب',
   'office.updated': 'تعديل بيانات مكتب',
   'office.code_regenerated': 'توليد كود مكتب جديد',
+  'office.logo_updated': 'تغيير لوغو المكتب',
+  'office.logo_removed': 'إزالة لوغو المكتب',
   'office.license.active': 'تفعيل الترخيص',
   'office.license.suspended': 'إيقاف الترخيص',
   'office.license.expired': 'إنهاء الترخيص',
