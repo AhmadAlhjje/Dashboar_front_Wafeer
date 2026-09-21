@@ -1,6 +1,6 @@
-# الواجهة وحدها على المنفذ 5001 (nginx).
-# تمرّر /api إلى الباك اند عبر API_UPSTREAM — افتراضياً منفذ 5000 على نفس الجهاز
-# (host.docker.internal). إن كان الباك اند على جهاز آخر: API_UPSTREAM=IP_OR_HOST:5000
+# الواجهة وحدها على المنفذ 5001 (nginx) — تُفتح من المتصفح على http://163.245.221.210:5001
+# تمرّر /api إلى الباك اند عبر API_UPSTREAM — منفذ 5000 على نفس الخادم (host.docker.internal)،
+# فتصل الطلبات من نفس الأصل بلا CORS. إن نُقل الباك اند إلى جهاز آخر: API_UPSTREAM=IP:5000
 #   التشغيل:  docker compose up -d --build
 #   السجلات:  docker compose logs -f
 services:

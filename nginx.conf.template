@@ -2,7 +2,7 @@
 # قالب: ${API_UPSTREAM} يُستبدل عند إقلاع الحاوية بقيمة متغير البيئة (افتراضياً host.docker.internal:5000).
 server {
     listen 5001;
-    server_name _;
+    server_name 163.245.221.210 _;
     root /usr/share/nginx/html;
     index index.html;
 
