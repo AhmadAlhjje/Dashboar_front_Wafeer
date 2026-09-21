@@ -1,0 +1,17 @@
+# الواجهة وحدها على المنفذ 5001 (nginx).
+# تمرّر /api إلى الباك اند عبر API_UPSTREAM — افتراضياً منفذ 5000 على نفس الجهاز
+# (host.docker.internal). إن كان الباك اند على جهاز آخر: API_UPSTREAM=IP_OR_HOST:5000
+#   التشغيل:  docker compose up -d --build
+#   السجلات:  docker compose logs -f
+services:
+  client:
+    build: .
+    image: wafeer-dashboard-client
+    container_name: wafeer-dashboard-client
+    restart: unless-stopped
+    environment:
+      API_UPSTREAM: host.docker.internal:5000
+    ports:
+      - "5001:5001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
