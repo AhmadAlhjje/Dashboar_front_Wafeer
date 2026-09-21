@@ -12,6 +12,8 @@ server {
 
     # الباك اند (منفذ 5000 على المضيف افتراضياً — انظر API_UPSTREAM في docker-compose.yml)
     location /api/ {
+        # رفع لوغو المكتب (حتى 20MB) — افتراضي nginx هو 1MB فيعيد 413 قبل أن يصل الطلب إلى الباك اند
+        client_max_body_size 25m;
         proxy_pass http://${API_UPSTREAM}/api/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

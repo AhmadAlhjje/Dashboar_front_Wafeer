@@ -30,6 +30,9 @@ const MESSAGES: Record<string, string> = {
   SAME_PASSWORD: 'كلمة المرور الجديدة مطابقة للحالية',
   CANNOT_DEACTIVATE_SELF: 'لا يمكنك تعطيل حسابك',
   PLATFORM_UNAUTHORIZED: 'مفتاح المنصّة غير صحيح (راجع PLATFORM_API_KEY)',
+  FILE_TOO_LARGE: 'حجم الصورة يتجاوز الحدّ المسموح (20MB)',
+  INVALID_OFFICE_LOGO: 'الصورة يجب أن تكون PNG أو JPG أو WEBP',
+  HTTP_413: 'حجم الطلب كبير جداً — الحدّ 20MB للصورة',
 };
 export const messageFor = (e: unknown): string =>
   e instanceof ApiError ? (MESSAGES[e.code] ?? e.message) : e instanceof Error ? e.message : 'حدث خطأ غير متوقع';

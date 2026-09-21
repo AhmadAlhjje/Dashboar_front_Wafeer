@@ -263,9 +263,9 @@ function LogoCard({ office, onChanged }: { office: Office; onChanged: () => Prom
       setFile(null);
       return setError('الصورة يجب أن تكون PNG أو JPG أو WEBP');
     }
-    if (f && f.size > 2 * 1024 * 1024) {
+    if (f && f.size > 20 * 1024 * 1024) {
       setFile(null);
-      return setError('حجم الصورة يجب ألا يتجاوز 2MB');
+      return setError('حجم الصورة يجب ألا يتجاوز 20MB');
     }
     setFile(f);
   };
@@ -309,7 +309,7 @@ function LogoCard({ office, onChanged }: { office: Office; onChanged: () => Prom
           {preview ? <img src={preview} alt="معاينة اللوغو الجديد" /> : current ? <img src={current} alt="لوغو المكتب" /> : <span className="muted">لا لوغو</span>}
         </div>
         <div className="logo-actions">
-          <p className="muted">يُستخدم في ترويسة الطباعة داخل تطبيق المكتب. يمكن تغييره من هنا في أي وقت (PNG/JPG/WEBP حتى 2MB).</p>
+          <p className="muted">يُستخدم في ترويسة الطباعة داخل تطبيق المكتب. يمكن تغييره من هنا في أي وقت (PNG/JPG/WEBP حتى 20MB).</p>
           <Field label="اختيار صورة">
             <Input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" onChange={pick} />
           </Field>
