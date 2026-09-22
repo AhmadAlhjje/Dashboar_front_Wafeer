@@ -116,7 +116,7 @@ export function effectiveStatus(o: Pick<Office, 'status' | 'expiresAt'> & Partia
   return 'ACTIVE';
 }
 
-export const STATUS_LABEL: Record<EffectiveStatus, string> = { ACTIVE: 'نشط', SUSPENDED: 'موقوف', EXPIRED: 'منتهٍ', LIMIT_REACHED: 'بلغ حد الحركات' };
+export const STATUS_LABEL: Record<EffectiveStatus, string> = { ACTIVE: 'نشط', SUSPENDED: 'موقوف', EXPIRED: 'منتهٍ', LIMIT_REACHED: 'بلغ حد الحركات — الإضافة موقوفة' };
 
 export const ACTION_LABEL: Record<string, string> = {
   'owner.login': 'تسجيل دخول',
@@ -130,6 +130,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'office.logo_updated': 'تغيير لوغو المكتب',
   'office.logo_removed': 'إزالة لوغو المكتب',
   'office.device_revoked': 'إلغاء جهاز مكتب',
+  'office.movements_reset': 'تصفير عدّاد الحركات',
   'office.license.active': 'تفعيل الترخيص',
   'office.license.suspended': 'إيقاف الترخيص',
   'office.license.expired': 'إنهاء الترخيص',

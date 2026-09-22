@@ -108,6 +108,7 @@ export const api = {
     return call<Office>('PUT', `/offices/${id}/logo`, form);
   },
   removeOfficeLogo: (id: string) => call<Office>('DELETE', `/offices/${id}/logo`),
+  resetOfficeMovements: (id: string) => call<Office>('POST', `/offices/${id}/movements/reset`),
   officeDevices: (id: string) => call<OfficeDevice[]>('GET', `/offices/${id}/devices`),
   revokeOfficeDevice: (id: string, deviceId: string) => call<OfficeDevice>('DELETE', `/offices/${id}/devices/${deviceId}`),
   /** يجلب صورة اللوغو الحالية (بتوكن المالك) كـ Blob لعرضها؛ null إن لم يوجد. */

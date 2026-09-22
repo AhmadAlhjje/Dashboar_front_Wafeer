@@ -172,6 +172,21 @@ function LicenseCard({ office, onSaved }: { office: Office; onSaved: () => Promi
     setLimit(office.movementLimit == null ? '' : String(office.movementLimit));
   }, [office]);
 
+  const resetCounter = async () => {
+    if (!window.confirm(`تصفير عدّاد الحركات المضافة للمكتب «${office.name}» (${office.movementsUsed} → 0)؟ يعود للمكتب حقّ الإضافة فوراً.`)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.resetOfficeMovements(office.id);
+      toast('success', 'صُفّر عدّاد الحركات');
+      await onSaved();
+    } catch (err) {
+      setError(messageFor(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -212,9 +227,14 @@ function LicenseCard({ office, onSaved }: { office: Office; onSaved: () => Promi
         </Field>
         <Field
           label="حد الحركات (إضافات فقط)"
-          hint={`المستخدم حتى الآن: ${office.movementsUsed}. عند بلوغ الحد يُقفل التطبيق حتى ترفع الحد — التعديل والحذف لا يُحسبان. فارغ = بلا حد`}
+          hint={`المضاف حتى الآن: ${office.movementsUsed}. عند بلوغ الحد يعمل التطبيق كالمعتاد لكن تُمنع إضافة حركات جديدة (التعديل والحذف مسموحان) حتى ترفع الحد أو تصفّر العدّاد. فارغ = بلا حد`}
         >
-          <Input value={limit} onChange={(e) => setLimit(e.target.value)} dir="ltr" inputMode="numeric" placeholder="بلا حد" />
+          <div className="row-inline">
+            <Input value={limit} onChange={(e) => setLimit(e.target.value)} dir="ltr" inputMode="numeric" placeholder="بلا حد" />
+            <Button type="button" onClick={resetCounter} disabled={saving || office.movementsUsed === 0}>
+              تصفير العدّاد ({office.movementsUsed})
+            </Button>
+          </div>
         </Field>
         <Field label="رسالة تظهر للمكتب في شاشة القفل" hint="مثال: يرجى تسديد الاشتراك للتواصل 0998107722">
           <Textarea value={message} onChange={(e) => setMessage(e.target.value)} />

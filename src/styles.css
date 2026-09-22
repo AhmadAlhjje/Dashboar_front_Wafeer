@@ -685,3 +685,12 @@ textarea.input {
   flex: 1 1 260px;
   min-width: 0;
 }
+
+.row-inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.row-inline .input {
+  flex: 1 1 auto;
+}

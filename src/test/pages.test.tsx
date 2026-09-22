@@ -18,6 +18,7 @@ const apiMock = vi.hoisted(() => ({
   removeOfficeLogo: vi.fn(),
   officeLogoBlob: vi.fn(),
   officeDevices: vi.fn(),
+  resetOfficeMovements: vi.fn(),
   revokeOfficeDevice: vi.fn(),
   health: vi.fn(),
   overview: vi.fn(),
@@ -182,12 +183,17 @@ describe('movement limit + devices (2026-09-22)', () => {
     apiMock.setLicense.mockResolvedValue(office({ id: '1', movementLimit: 500, movementsUsed: 100 }));
     renderAt('/offices/1', <OfficePage />);
     expect(await screen.findByText('100 / 100')).toBeInTheDocument();
-    expect(screen.getAllByText('بلغ حد الحركات').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/بلغ حد الحركات/).length).toBeGreaterThan(0);
     const limit = screen.getByLabelText('حد الحركات (إضافات فقط)');
     await user.clear(limit);
     await user.type(limit, '500');
     await user.click(screen.getByRole('button', { name: 'حفظ الترخيص' }));
     await waitFor(() => expect(apiMock.setLicense).toHaveBeenCalledWith('1', expect.objectContaining({ movementLimit: 500 })));
+    // تصفير العدّاد من اللوحة (لا من التطبيق)
+    apiMock.resetOfficeMovements.mockResolvedValue(office({ id: '1', movementLimit: 500, movementsUsed: 0 }));
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: /تصفير العدّاد/ }));
+    await waitFor(() => expect(apiMock.resetOfficeMovements).toHaveBeenCalledWith('1'));
   });
 
   it('lists enrolled devices and revokes one after confirmation', async () => {
