@@ -17,6 +17,8 @@ const apiMock = vi.hoisted(() => ({
   setOfficeLogo: vi.fn(),
   removeOfficeLogo: vi.fn(),
   officeLogoBlob: vi.fn(),
+  officeDevices: vi.fn(),
+  revokeOfficeDevice: vi.fn(),
   health: vi.fn(),
   overview: vi.fn(),
   audit: vi.fn(),
@@ -44,6 +46,8 @@ const office = (o: Partial<Office>): Office => ({
   phone: null,
   address: null,
   notes: null,
+  movementLimit: null,
+  movementsUsed: 0,
   logoPath: null,
   logoUpdatedAt: null,
   createdAt: '2026-09-20T00:00:00.000Z',
@@ -66,6 +70,7 @@ function renderAt(path: string, element: React.ReactNode) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  apiMock.officeDevices.mockResolvedValue([]);
   tokenStore.set(null);
 });
 
@@ -149,7 +154,7 @@ describe('office page', () => {
     await user.selectOptions(screen.getByLabelText('الحالة'), 'SUSPENDED');
     await user.type(screen.getByLabelText('رسالة تظهر للمكتب في شاشة القفل'), 'لم يُسدَّد');
     await user.click(screen.getByRole('button', { name: 'حفظ الترخيص' }));
-    await waitFor(() => expect(apiMock.setLicense).toHaveBeenCalledWith('1', { status: 'SUSPENDED', expiresAt: null, message: 'لم يُسدَّد' }));
+    await waitFor(() => expect(apiMock.setLicense).toHaveBeenCalledWith('1', { status: 'SUSPENDED', expiresAt: null, message: 'لم يُسدَّد', movementLimit: null }));
     expect(await screen.findByText(/سيظهر القفل لدى المكتب/)).toBeInTheDocument();
   });
 });
@@ -167,6 +172,36 @@ describe('office code regeneration', () => {
     await waitFor(() => expect(apiMock.regenerateCode).toHaveBeenCalledWith('1'));
     const shown = await screen.findByRole('dialog', { name: 'الكود الجديد للمكتب' });
     expect(within(shown).getByText('NEWC2DE9')).toBeInTheDocument();
+  });
+});
+
+describe('movement limit + devices (2026-09-22)', () => {
+  it('saves a movement limit, shows used/limit, and marks LIMIT_REACHED', async () => {
+    const user = userEvent.setup();
+    apiMock.office.mockResolvedValue({ office: office({ id: '1', movementLimit: 100, movementsUsed: 100 }), admins: [], audit: [] });
+    apiMock.setLicense.mockResolvedValue(office({ id: '1', movementLimit: 500, movementsUsed: 100 }));
+    renderAt('/offices/1', <OfficePage />);
+    expect(await screen.findByText('100 / 100')).toBeInTheDocument();
+    expect(screen.getAllByText('بلغ حد الحركات').length).toBeGreaterThan(0);
+    const limit = screen.getByLabelText('حد الحركات (إضافات فقط)');
+    await user.clear(limit);
+    await user.type(limit, '500');
+    await user.click(screen.getByRole('button', { name: 'حفظ الترخيص' }));
+    await waitFor(() => expect(apiMock.setLicense).toHaveBeenCalledWith('1', expect.objectContaining({ movementLimit: 500 })));
+  });
+
+  it('lists enrolled devices and revokes one after confirmation', async () => {
+    const user = userEvent.setup();
+    apiMock.office.mockResolvedValue({ office: office({ id: '1' }), admins: [], audit: [] });
+    apiMock.officeDevices.mockResolvedValue([
+      { id: '3', officeId: '1', label: 'أحمد — 2026-09-22 10:00', enrolledBy: '9', lastSeenAt: null, revokedAt: null, createdAt: '2026-09-22T10:00:00.000Z' },
+    ]);
+    apiMock.revokeOfficeDevice.mockResolvedValue({ id: '3', revokedAt: '2026-09-22T11:00:00.000Z' });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderAt('/offices/1', <OfficePage />);
+    expect(await screen.findByText('أحمد — 2026-09-22 10:00')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'إلغاء' }));
+    await waitFor(() => expect(apiMock.revokeOfficeDevice).toHaveBeenCalledWith('1', '3'));
   });
 });
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, messageFor } from '../api/client';
-import { ACTION_LABEL, effectiveStatus, type AuditRecord, type LicenseStatus, type Office, type OfficeAdmin } from '../api/types';
+import { ACTION_LABEL, effectiveStatus, type AuditRecord, type LicenseStatus, type Office, type OfficeAdmin, type OfficeDevice } from '../api/types';
 import { Button, Card, CopyButton, Empty, ErrorBox, Field, Input, Modal, Select, Stat, StatusBadge, Textarea, fmtDate, toDateInput, useToast } from '../components/ui';
 import { suggestPassword } from './OfficesPage';
 
@@ -46,8 +46,9 @@ export function OfficePage() {
             {office.name} <StatusBadge status={status} />
           </h1>
           <p className="muted">
-            كود المكتب: <span className="mono">{office.code}</span> <CopyButton value={office.code} /> · أُنشئ {fmtDate(office.createdAt)}
+            كود التفعيل الحالي: <span className="mono">{office.code}</span> <CopyButton value={office.code} /> · أُنشئ {fmtDate(office.createdAt)}
           </p>
+          <p className="muted small">الكود يُستخدم مرة واحدة لتفعيل جهاز؛ بعد استعماله يتولّد كود جديد تلقائياً ويظهر هنا فقط.</p>
         </div>
         <RegenerateCode office={office} onDone={load} />
       </header>
@@ -57,6 +58,11 @@ export function OfficePage() {
         <Stat label="الإداريون (نشط/الكل)" value={`${office.stats?.activeAdmins ?? 0} / ${office.stats?.admins ?? 0}`} />
         <Stat label="العملاء" value={office.stats?.clients ?? 0} />
         <Stat label="الحركات" value={office.stats?.movements ?? 0} tone="gold" />
+        <Stat
+          label="الإضافات / الحد"
+          value={office.movementLimit == null ? `${office.movementsUsed} / بلا حد` : `${office.movementsUsed} / ${office.movementLimit}`}
+          tone={office.movementLimit != null && office.movementsUsed >= office.movementLimit ? 'danger' : undefined}
+        />
         <Stat label="حركات اليوم" value={office.stats?.movementsToday ?? 0} />
         <Stat label="آخر حركة" value={fmtDate(office.stats?.lastMovementAt)} />
       </div>
@@ -66,6 +72,7 @@ export function OfficePage() {
         <InfoCard office={office} onSaved={load} />
       </div>
       <LogoCard office={office} onChanged={load} />
+      <DevicesCard officeId={office.id} />
       <AdminsCard officeId={office.id} admins={admins} onChanged={load} toast={toast} />
       <Card title="سجل عمليات هذا المكتب">
         {audit.length === 0 ? (
@@ -122,7 +129,7 @@ function RegenerateCode({ office, onDone }: { office: Office; onDone: () => Prom
       <Button onClick={() => setConfirm(true)}>توليد كود جديد</Button>
       <Modal open={confirm} title="توليد كود مكتب جديد" onClose={() => !busy && setConfirm(false)}>
         <p>
-          سيتوقف الكود الحالي <span className="mono">{office.code}</span> فوراً ويُستبدل بكود جديد. الأجهزة المسجّلة الدخول حالياً تكمل عملها، وعند الدخول التالي يُطلب منها الكود الجديد.
+          سيتوقف الكود الحالي <span className="mono">{office.code}</span> فوراً ويُستبدل بكود جديد. الأجهزة المفعَّلة سابقاً تكمل عملها بمفتاحها الدائم؛ الكود الجديد يلزم فقط لتفعيل جهاز جديد.
         </p>
         <div className="modal-actions">
           <Button onClick={() => setConfirm(false)} disabled={busy}>
@@ -136,7 +143,7 @@ function RegenerateCode({ office, onDone }: { office: Office; onDone: () => Prom
       <Modal open={newCode !== null} title="الكود الجديد للمكتب" onClose={() => setNewCode(null)}>
         {newCode ? (
           <div className="handover">
-            <p className="muted">سلّم هذا الكود للمكتب؛ يُدخله مرة واحدة في شاشة الدخول:</p>
+            <p className="muted">سلّم هذا الكود للمكتب؛ يُدخله مرة واحدة عند أول دخول على الجهاز الجديد (يُستهلك بعدها ويتولّد غيره):</p>
             <dl className="kv">
               <dt>كود المكتب</dt>
               <dd className="mono">
@@ -155,20 +162,32 @@ function LicenseCard({ office, onSaved }: { office: Office; onSaved: () => Promi
   const [status, setStatus] = useState<LicenseStatus>(office.status);
   const [expiresAt, setExpiresAt] = useState(toDateInput(office.expiresAt));
   const [message, setMessage] = useState(office.message ?? '');
+  const [limit, setLimit] = useState(office.movementLimit == null ? '' : String(office.movementLimit));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     setStatus(office.status);
     setExpiresAt(toDateInput(office.expiresAt));
     setMessage(office.message ?? '');
+    setLimit(office.movementLimit == null ? '' : String(office.movementLimit));
   }, [office]);
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
+    const trimmedLimit = limit.trim();
+    if (trimmedLimit !== '' && !/^\d+$/.test(trimmedLimit)) {
+      setSaving(false);
+      return setError('حد الحركات يجب أن يكون رقماً صحيحاً أو فارغاً (بلا حد)');
+    }
     try {
-      await api.setLicense(office.id, { status, expiresAt: expiresAt || null, message: message.trim() || null });
+      await api.setLicense(office.id, {
+        status,
+        expiresAt: expiresAt || null,
+        message: message.trim() || null,
+        movementLimit: trimmedLimit === '' ? null : Number(trimmedLimit),
+      });
       toast('success', status === 'ACTIVE' ? 'الترخيص نشط — سيُرفع القفل لدى المكتب خلال ثوانٍ' : 'تم تغيير الترخيص — سيظهر القفل لدى المكتب خلال ثوانٍ');
       await onSaved();
     } catch (err) {
@@ -190,6 +209,12 @@ function LicenseCard({ office, onSaved }: { office: Office; onSaved: () => Promi
         </Field>
         <Field label="ينتهي الاشتراك في" hint="بعد هذا التاريخ يُعتبر النشط منتهياً تلقائياً — فارغ = بلا انتهاء">
           <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} dir="ltr" />
+        </Field>
+        <Field
+          label="حد الحركات (إضافات فقط)"
+          hint={`المستخدم حتى الآن: ${office.movementsUsed}. عند بلوغ الحد يُقفل التطبيق حتى ترفع الحد — التعديل والحذف لا يُحسبان. فارغ = بلا حد`}
+        >
+          <Input value={limit} onChange={(e) => setLimit(e.target.value)} dir="ltr" inputMode="numeric" placeholder="بلا حد" />
         </Field>
         <Field label="رسالة تظهر للمكتب في شاشة القفل" hint="مثال: يرجى تسديد الاشتراك للتواصل 0998107722">
           <Textarea value={message} onChange={(e) => setMessage(e.target.value)} />
@@ -326,6 +351,75 @@ function LogoCard({ office, onChanged }: { office: Office; onChanged: () => Prom
           </div>
         </div>
       </div>
+    </Card>
+  );
+}
+
+/** أجهزة المكتب (2026-09-22): كل تفعيل بالكود يسجّل جهازاً؛ إلغاؤه يجبره على كود جديد عند دخوله التالي. */
+function DevicesCard({ officeId }: { officeId: string }) {
+  const toast = useToast();
+  const [devices, setDevices] = useState<OfficeDevice[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try {
+      setDevices(await api.officeDevices(officeId));
+      setError(null);
+    } catch (e) {
+      setError(messageFor(e));
+    }
+  }, [officeId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const revoke = async (d: OfficeDevice) => {
+    if (!window.confirm(`إلغاء الجهاز «${d.label ?? d.id}»؟ سيُطلب منه كود مكتب جديد عند الدخول التالي.`)) return;
+    try {
+      await api.revokeOfficeDevice(officeId, d.id);
+      toast('success', 'أُلغي الجهاز');
+      await load();
+    } catch (e) {
+      toast('error', messageFor(e));
+    }
+  };
+
+  return (
+    <Card title="الأجهزة المفعَّلة">
+      <ErrorBox text={error} />
+      {devices === null ? (
+        <p className="muted">جارٍ التحميل…</p>
+      ) : devices.length === 0 ? (
+        <Empty text="لم يُفعَّل أي جهاز بعد — يُفعَّل الجهاز بإدخال كود المكتب في شاشة الدخول" />
+      ) : (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>الجهاز</th>
+              <th>فُعّل في</th>
+              <th>آخر دخول</th>
+              <th>الحالة</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {devices.map((d) => (
+              <tr key={d.id}>
+                <td>{d.label ?? `#${d.id}`}</td>
+                <td className="num">{fmtDate(d.createdAt)}</td>
+                <td className="num">{fmtDate(d.lastSeenAt)}</td>
+                <td>{d.revokedAt ? <span className="badge badge-suspended">مُلغى</span> : <span className="badge badge-active">فعّال</span>}</td>
+                <td className="row-end">
+                  {d.revokedAt ? null : (
+                    <Button variant="danger" onClick={() => revoke(d)}>
+                      إلغاء
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </Card>
   );
 }

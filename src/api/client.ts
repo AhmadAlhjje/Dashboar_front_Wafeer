@@ -1,4 +1,4 @@
-import type { AuditRecord, CreateOfficeInput, CreatedOffice, License, Office, OfficeAdmin, Overview, Owner } from './types';
+import type { AuditRecord, CreateOfficeInput, CreatedOffice, LicenseStatus, Office, OfficeAdmin, OfficeDevice, Overview, Owner } from './types';
 
 const TOKEN_KEY = 'wafeer_dashboard_token';
 const BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || '/api';
@@ -98,7 +98,7 @@ export const api = {
   office: (id: string) => call<{ office: Office; admins: OfficeAdmin[]; audit: AuditRecord[] }>('GET', `/offices/${id}`),
   createOffice: (input: CreateOfficeInput) => call<CreatedOffice>('POST', '/offices', input),
   updateOffice: (id: string, patch: Partial<Pick<Office, 'name' | 'phone' | 'address' | 'notes'>>) => call<Office>('PATCH', `/offices/${id}`, patch),
-  setLicense: (id: string, license: Pick<License, 'status'> & { expiresAt?: string | null; message?: string | null }) =>
+  setLicense: (id: string, license: { status: LicenseStatus; expiresAt?: string | null; message?: string | null; movementLimit?: number | null }) =>
     call<Office>('PUT', `/offices/${id}/license`, license),
   regenerateCode: (id: string) => call<Office>('POST', `/offices/${id}/code`),
   /** لوغو المكتب: يُبدَّل من اللوحة متى شاء المالك (داخل التطبيق يبقى مرة واحدة). */
@@ -108,6 +108,8 @@ export const api = {
     return call<Office>('PUT', `/offices/${id}/logo`, form);
   },
   removeOfficeLogo: (id: string) => call<Office>('DELETE', `/offices/${id}/logo`),
+  officeDevices: (id: string) => call<OfficeDevice[]>('GET', `/offices/${id}/devices`),
+  revokeOfficeDevice: (id: string, deviceId: string) => call<OfficeDevice>('DELETE', `/offices/${id}/devices/${deviceId}`),
   /** يجلب صورة اللوغو الحالية (بتوكن المالك) كـ Blob لعرضها؛ null إن لم يوجد. */
   officeLogoBlob: async (id: string): Promise<Blob | null> => {
     const token = tokenStore.get();

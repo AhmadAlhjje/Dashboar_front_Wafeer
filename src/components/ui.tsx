@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes, forwardRef } from 'react';
-import { STATUS_LABEL, type LicenseStatus } from '../api/types';
+import { STATUS_LABEL, type EffectiveStatus } from '../api/types';
 
 // ── أزرار ─────────────────────────────────────────────────────────────────
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
@@ -54,7 +54,7 @@ export function Card({ title, actions, children, className = '' }: { title?: Rea
     </section>
   );
 }
-export function StatusBadge({ status }: { status: LicenseStatus }) {
+export function StatusBadge({ status }: { status: EffectiveStatus }) {
   return <span className={`badge badge-${status.toLowerCase()}`}>{STATUS_LABEL[status]}</span>;
 }
 export function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: 'gold' | 'success' | 'danger' | 'warning' }) {

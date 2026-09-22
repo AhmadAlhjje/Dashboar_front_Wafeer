@@ -1,4 +1,6 @@
 export type LicenseStatus = 'ACTIVE' | 'SUSPENDED' | 'EXPIRED';
+/** الحالة الفعلية تشمل بلوغ حد الحركات (لا تُخزَّن؛ مشتقة). */
+export type EffectiveStatus = LicenseStatus | 'LIMIT_REACHED';
 
 export interface OfficeStats {
   officeId: string;
@@ -11,10 +13,22 @@ export interface OfficeStats {
 }
 
 export interface License {
-  status: LicenseStatus;
+  status: EffectiveStatus;
   expiresAt: string | null;
   message: string | null;
+  movementLimit?: number | null;
+  movementsUsed?: number;
   checkedAt: string;
+}
+
+export interface OfficeDevice {
+  id: string;
+  officeId: string;
+  label: string | null;
+  enrolledBy: string | null;
+  lastSeenAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
 }
 
 export interface Office {
@@ -27,6 +41,9 @@ export interface Office {
   phone: string | null;
   address: string | null;
   notes: string | null;
+  /** حد الحركات (إضافات فقط؛ null = بلا حد) وعدّاد الإضافات. */
+  movementLimit: number | null;
+  movementsUsed: number;
   /** لوغو المكتب (يُدار من اللوحة): مسار على خادم وفير أو null، ونسخة تتغيّر مع كل رفع. */
   logoPath: string | null;
   logoUpdatedAt: string | null;
@@ -92,13 +109,14 @@ export interface CreatedOffice {
 }
 
 /** الحالة الفعلية للعرض: نشط منتهي التاريخ يُعرض «منتهٍ». */
-export function effectiveStatus(o: Pick<Office, 'status' | 'expiresAt'>): LicenseStatus {
+export function effectiveStatus(o: Pick<Office, 'status' | 'expiresAt'> & Partial<Pick<Office, 'movementLimit' | 'movementsUsed'>>): EffectiveStatus {
   if (o.status !== 'ACTIVE') return o.status;
   if (o.expiresAt && new Date(o.expiresAt).getTime() <= Date.now()) return 'EXPIRED';
+  if (o.movementLimit != null && (o.movementsUsed ?? 0) >= o.movementLimit) return 'LIMIT_REACHED';
   return 'ACTIVE';
 }
 
-export const STATUS_LABEL: Record<LicenseStatus, string> = { ACTIVE: 'نشط', SUSPENDED: 'موقوف', EXPIRED: 'منتهٍ' };
+export const STATUS_LABEL: Record<EffectiveStatus, string> = { ACTIVE: 'نشط', SUSPENDED: 'موقوف', EXPIRED: 'منتهٍ', LIMIT_REACHED: 'بلغ حد الحركات' };
 
 export const ACTION_LABEL: Record<string, string> = {
   'owner.login': 'تسجيل دخول',
@@ -111,6 +129,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'office.code_regenerated': 'توليد كود مكتب جديد',
   'office.logo_updated': 'تغيير لوغو المكتب',
   'office.logo_removed': 'إزالة لوغو المكتب',
+  'office.device_revoked': 'إلغاء جهاز مكتب',
   'office.license.active': 'تفعيل الترخيص',
   'office.license.suspended': 'إيقاف الترخيص',
   'office.license.expired': 'إنهاء الترخيص',

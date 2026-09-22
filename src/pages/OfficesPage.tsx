@@ -180,7 +180,7 @@ export function OfficesPage() {
           <Field label="هاتف المدير">
             <Input value={form.adminPhone} onChange={set('adminPhone')} dir="ltr" />
           </Field>
-          <Field label="بريد المدير">
+          <Field label="بريد المدير (اختياري)">
             <Input value={form.adminEmail} onChange={set('adminEmail')} dir="ltr" type="email" />
           </Field>
           <div className="span-2">
