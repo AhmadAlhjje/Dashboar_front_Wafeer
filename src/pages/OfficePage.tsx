@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, messageFor } from '../api/client';
 import { ACTION_LABEL, effectiveStatus, type AuditRecord, type LicenseStatus, type Office, type OfficeAdmin, type OfficeDevice } from '../api/types';
 import { Button, Card, CopyButton, Empty, ErrorBox, Field, Input, Modal, Select, Stat, StatusBadge, Textarea, fmtDate, toDateInput, useToast } from '../components/ui';
@@ -74,6 +74,7 @@ export function OfficePage() {
       <LogoCard office={office} onChanged={load} />
       <DevicesCard officeId={office.id} />
       <AdminsCard officeId={office.id} admins={admins} onChanged={load} toast={toast} />
+      <DeleteOfficeCard office={office} />
       <Card title="سجل عمليات هذا المكتب">
         {audit.length === 0 ? (
           <Empty text="لا عمليات بعد" />
@@ -101,6 +102,72 @@ export function OfficePage() {
         )}
       </Card>
     </>
+  );
+}
+
+/**
+ * حذف المكتب نهائياً (قرار المستخدم 2026-09-23): عملية خطِرة لا رجعة فيها، فلا تُنفَّذ إلا بعد
+ * كتابة **كود المكتب** في نافذة التأكيد — يمنع ذلك حذف المكتب الخطأ.
+ */
+function DeleteOfficeCard({ office }: { office: Office }) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const matches = typed.trim().replace(/[\s-]/g, '').toUpperCase() === office.code.toUpperCase();
+
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteOffice(office.id, typed.trim());
+      toast('success', `حُذف المكتب «${office.name}» وكل بياناته`);
+      navigate('/offices');
+    } catch (err) {
+      setError(messageFor(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="حذف المكتب">
+      <p className="muted">
+        يحذف المكتب «{office.name}» وكل بياناته نهائياً: الحركات والقيود والعملاء والعملات والإداريون والأجهزة المفعَّلة. لا يمكن التراجع، ولا توجد نسخة
+        احتياطية داخل اللوحة.
+      </p>
+      <div className="row-end">
+        <Button
+          variant="danger"
+          onClick={() => {
+            setTyped('');
+            setError(null);
+            setOpen(true);
+          }}
+        >
+          حذف المكتب نهائياً
+        </Button>
+      </div>
+      <Modal open={open} title="حذف المكتب نهائياً" onClose={() => !busy && setOpen(false)}>
+        <p>
+          سيُحذف المكتب «{office.name}» وكل بياناته ({office.stats?.movements ?? 0} حركة، {office.stats?.clients ?? 0} عميل، {office.stats?.admins ?? 0}{' '}
+          إداري) بلا رجعة.
+        </p>
+        <Field label="اكتب كود المكتب للتأكيد" hint={`الكود الحالي: ${office.code}`} error={error ?? undefined}>
+          <Input value={typed} onChange={(e) => setTyped(e.target.value)} dir="ltr" placeholder={office.code} autoFocus />
+        </Field>
+        <div className="modal-actions">
+          <Button onClick={() => setOpen(false)} disabled={busy}>
+            إلغاء
+          </Button>
+          <Button variant="danger" loading={busy} disabled={!matches} onClick={run}>
+            حذف المكتب وكل بياناته
+          </Button>
+        </div>
+      </Modal>
+    </Card>
   );
 }
 

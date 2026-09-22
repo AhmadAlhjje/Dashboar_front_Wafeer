@@ -30,6 +30,7 @@ const MESSAGES: Record<string, string> = {
   SAME_PASSWORD: 'كلمة المرور الجديدة مطابقة للحالية',
   CANNOT_DEACTIVATE_SELF: 'لا يمكنك تعطيل حسابك',
   PLATFORM_UNAUTHORIZED: 'مفتاح المنصّة غير صحيح (راجع PLATFORM_API_KEY)',
+  OFFICE_DELETE_CONFIRMATION_INVALID: 'اكتب كود المكتب بالضبط لتأكيد الحذف',
   FILE_TOO_LARGE: 'حجم الصورة يتجاوز الحدّ المسموح (20MB)',
   INVALID_OFFICE_LOGO: 'الصورة يجب أن تكون PNG أو JPG أو WEBP',
   HTTP_413: 'حجم الطلب كبير جداً — الحدّ 20MB للصورة',
@@ -104,6 +105,9 @@ export const api = {
   setLicense: (id: string, license: { status: LicenseStatus; expiresAt?: string | null; message?: string | null; movementLimit?: number | null }) =>
     call<Office>('PUT', `/offices/${id}/license`, license),
   regenerateCode: (id: string) => call<Office>('POST', `/offices/${id}/code`),
+  /** حذف مكتب بكل بياناته — `confirm` هو كود المكتب نفسه (لا رجعة). */
+  deleteOffice: (id: string, confirm: string) =>
+    call<{ deleted: true; office: { id: string; code: string; name: string }; summary: Record<string, number> }>('DELETE', `/offices/${id}`, { confirm }),
   /** لوغو المكتب: يُبدَّل من اللوحة متى شاء المالك (داخل التطبيق يبقى مرة واحدة). */
   setOfficeLogo: (id: string, file: File) => {
     const form = new FormData();

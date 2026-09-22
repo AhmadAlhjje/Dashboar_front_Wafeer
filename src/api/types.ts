@@ -135,6 +135,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'office.created': 'إنشاء مكتب',
   'office.updated': 'تعديل بيانات مكتب',
   'office.code_regenerated': 'توليد كود مكتب جديد',
+  'office.deleted': 'حذف مكتب',
   'office.logo_updated': 'تغيير لوغو المكتب',
   'office.logo_removed': 'إزالة لوغو المكتب',
   'office.device_revoked': 'إلغاء جهاز مكتب',

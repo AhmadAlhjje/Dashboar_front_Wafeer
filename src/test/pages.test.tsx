@@ -14,6 +14,7 @@ const apiMock = vi.hoisted(() => ({
   setLicense: vi.fn(),
   updateOffice: vi.fn(),
   regenerateCode: vi.fn(),
+  deleteOffice: vi.fn(),
   setOfficeLogo: vi.fn(),
   removeOfficeLogo: vi.fn(),
   officeLogoBlob: vi.fn(),
@@ -327,5 +328,30 @@ describe('stop-all notice', () => {
     await user.click(screen.getByRole('button', { name: 'تفعيل الإيقاف' }));
     expect(await screen.findByText('اكتب الرسالة التي ستظهر في التطبيقات قبل التفعيل')).toBeInTheDocument();
     expect(apiMock.setNotice).not.toHaveBeenCalled();
+  });
+});
+
+/** حذف مكتب: زر خطِر + نافذة لا تُفعَّل إلا بكتابة كود المكتب (قرار المستخدم 2026-09-23). */
+describe('delete office', () => {
+  it('stays disabled until the office code is typed, then deletes and leaves the page', async () => {
+    const user = userEvent.setup();
+    apiMock.office.mockResolvedValue({ office: office({ id: '1', code: 'ABCD2345' }), admins: [], audit: [] });
+    apiMock.officeDevices.mockResolvedValue([]);
+    apiMock.officeLogoBlob.mockResolvedValue(null);
+    apiMock.deleteOffice.mockResolvedValue({ deleted: true, office: { id: '1', code: 'ABCD2345', name: 'مكتب حلب' }, summary: {} });
+    renderAt('/offices/1', <OfficePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'حذف المكتب نهائياً' }));
+    const confirm = await screen.findByRole('button', { name: 'حذف المكتب وكل بياناته' });
+    expect(confirm).toBeDisabled();
+
+    await user.type(screen.getByLabelText('اكتب كود المكتب للتأكيد'), 'WRONG123');
+    expect(screen.getByRole('button', { name: 'حذف المكتب وكل بياناته' })).toBeDisabled();
+    expect(apiMock.deleteOffice).not.toHaveBeenCalled();
+
+    await user.clear(screen.getByLabelText('اكتب كود المكتب للتأكيد'));
+    await user.type(screen.getByLabelText('اكتب كود المكتب للتأكيد'), 'abcd-2345');
+    await user.click(screen.getByRole('button', { name: 'حذف المكتب وكل بياناته' }));
+    await waitFor(() => expect(apiMock.deleteOffice).toHaveBeenCalledWith('1', 'abcd-2345'));
   });
 });
