@@ -118,6 +118,14 @@ export function effectiveStatus(o: Pick<Office, 'status' | 'expiresAt'> & Partia
 
 export const STATUS_LABEL: Record<EffectiveStatus, string> = { ACTIVE: 'نشط', SUSPENDED: 'موقوف', EXPIRED: 'منتهٍ', LIMIT_REACHED: 'بلغ حد الحركات — الإضافة موقوفة' };
 
+/** إعلان المنصّة: رسالة المالك التي تُوقف كل التطبيقات عند تفعيلها (2026-09-23). */
+export interface PlatformNotice {
+  isActive: boolean;
+  title: string | null;
+  message: string;
+  updatedAt: string | null;
+}
+
 export const ACTION_LABEL: Record<string, string> = {
   'owner.login': 'تسجيل دخول',
   'owner.password_changed': 'تغيير كلمة مرور المالك',
@@ -138,4 +146,6 @@ export const ACTION_LABEL: Record<string, string> = {
   'office.admin.password_reset': 'إعادة تعيين كلمة مرور إداري',
   'office.admin.activated': 'تفعيل إداري',
   'office.admin.deactivated': 'تعطيل إداري',
+  'notice.activated': 'تفعيل إعلان إيقاف التطبيقات',
+  'notice.cancelled': 'إلغاء إعلان إيقاف التطبيقات',
 };

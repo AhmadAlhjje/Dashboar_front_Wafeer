@@ -1,4 +1,4 @@
-import type { AuditRecord, CreateOfficeInput, CreatedOffice, LicenseStatus, Office, OfficeAdmin, OfficeDevice, Overview, Owner } from './types';
+import type { AuditRecord, CreateOfficeInput, CreatedOffice, LicenseStatus, Office, OfficeAdmin, OfficeDevice, Overview, Owner, PlatformNotice } from './types';
 
 const TOKEN_KEY = 'wafeer_dashboard_token';
 const BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || '/api';
@@ -94,6 +94,9 @@ export const api = {
   changePassword: (currentPassword: string, newPassword: string) => call<{ changed: boolean }>('PATCH', '/auth/me/password', { currentPassword, newPassword }),
   health: () => call<{ status: string; wafeer: boolean }>('GET', '/health'),
   overview: () => call<Overview>('GET', '/overview'),
+  /** إعلان المنصّة: تفعيله يوقف كل التطبيقات عند إقلاعها/دخولها التالي حتى يُلغى من هنا. */
+  notice: () => call<PlatformNotice>('GET', '/notice'),
+  setNotice: (input: { isActive: boolean; title?: string | null; message: string }) => call<PlatformNotice>('PUT', '/notice', input),
   offices: () => call<Office[]>('GET', '/offices'),
   office: (id: string) => call<{ office: Office; admins: OfficeAdmin[]; audit: AuditRecord[] }>('GET', `/offices/${id}`),
   createOffice: (input: CreateOfficeInput) => call<CreatedOffice>('POST', '/offices', input),

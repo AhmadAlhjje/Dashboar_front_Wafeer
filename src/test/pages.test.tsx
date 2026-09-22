@@ -22,6 +22,8 @@ const apiMock = vi.hoisted(() => ({
   revokeOfficeDevice: vi.fn(),
   health: vi.fn(),
   overview: vi.fn(),
+  notice: vi.fn(),
+  setNotice: vi.fn(),
   audit: vi.fn(),
 }));
 vi.mock('../api/client', async () => {
@@ -34,6 +36,7 @@ import { ApiError, tokenStore } from '../api/client';
 import { AuthProvider } from '../auth/AuthContext';
 import { ToastProvider } from '../components/ui';
 import { OfficePage } from '../pages/OfficePage';
+import { OverviewPage } from '../pages/OverviewPage';
 import { OfficesPage } from '../pages/OfficesPage';
 import { effectiveStatus } from '../api/types';
 
@@ -275,5 +278,54 @@ describe('auth provider', () => {
     );
     expect(screen.getByText('x')).toBeInTheDocument();
     expect(apiMock.me).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * إعلان إيقاف التطبيقات (قرار المستخدم 2026-09-23): رسالة + «تفعيل» ⇒ تتوقف كل التطبيقات،
+ * و«إلغاء الإيقاف» من اللوحة وحدها يعيدها للعمل.
+ */
+describe('stop-all notice', () => {
+  const overview = {
+    offices: { total: 1, active: 1, suspended: 0, expired: 0 },
+    movements: { total: 3, today: 1 },
+    clients: 2,
+    admins: 1,
+    recentAudit: [],
+  };
+
+  beforeEach(() => {
+    apiMock.overview.mockResolvedValue(overview);
+    apiMock.health.mockResolvedValue({ status: 'ok', wafeer: true });
+  });
+
+  it('activates the notice with the owner message, then cancels it', async () => {
+    const user = userEvent.setup();
+    apiMock.notice.mockResolvedValue({ isActive: false, title: null, message: '', updatedAt: null });
+    apiMock.setNotice.mockResolvedValue({ isActive: true, title: 'صيانة', message: 'التطبيق متوقف مؤقتاً', updatedAt: '2026-09-23T10:00:00.000Z' });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderAt('/', <OverviewPage />);
+
+    expect(await screen.findByText('غير مفعَّل')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('عنوان الرسالة (اختياري)'), 'صيانة');
+    await user.type(screen.getByLabelText('نصّ الرسالة'), 'التطبيق متوقف مؤقتاً');
+    await user.click(screen.getByRole('button', { name: 'تفعيل الإيقاف' }));
+    await waitFor(() => expect(apiMock.setNotice).toHaveBeenCalledWith({ isActive: true, title: 'صيانة', message: 'التطبيق متوقف مؤقتاً' }));
+
+    // بعد التفعيل تظهر حالة «مُفعَّل الآن» وزر الإلغاء
+    expect(await screen.findByText('مُفعَّل الآن')).toBeInTheDocument();
+    apiMock.setNotice.mockResolvedValue({ isActive: false, title: 'صيانة', message: 'التطبيق متوقف مؤقتاً', updatedAt: null });
+    await user.click(screen.getByRole('button', { name: 'إلغاء الإيقاف' }));
+    await waitFor(() => expect(apiMock.setNotice).toHaveBeenLastCalledWith({ isActive: false, title: 'صيانة', message: 'التطبيق متوقف مؤقتاً' }));
+  });
+
+  it('refuses to activate an empty message', async () => {
+    const user = userEvent.setup();
+    apiMock.notice.mockResolvedValue({ isActive: false, title: null, message: '', updatedAt: null });
+    renderAt('/', <OverviewPage />);
+    await screen.findByText('غير مفعَّل');
+    await user.click(screen.getByRole('button', { name: 'تفعيل الإيقاف' }));
+    expect(await screen.findByText('اكتب الرسالة التي ستظهر في التطبيقات قبل التفعيل')).toBeInTheDocument();
+    expect(apiMock.setNotice).not.toHaveBeenCalled();
   });
 });
